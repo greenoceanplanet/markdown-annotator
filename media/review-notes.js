@@ -18,6 +18,11 @@
 
   var CSS = `  mark[data-note-id] { background: #e8e3d3; box-shadow: inset 0 -2px 0 #b8ae93; cursor: pointer; }
   mark[data-note-id]:hover { background: #dcd5bd; }
+  mark[data-note-id].rp-flash { animation: rp-flash-anim 1s ease; }
+  @keyframes rp-flash-anim {
+    0%, 100% { background: #e8e3d3; }
+    30% { background: #ffe58a; }
+  }
 
   /* 코멘트 패널 — 머리말과 버튼이 한 장의 카드로 보이도록 묶는다. */
   /* 평소엔 반투명하게 비켜 있다가, 마우스를 올리면 또렷해진다. */
@@ -234,7 +239,13 @@
         del.title = '이 코멘트 삭제';
         del.onclick = (e) => { e.stopPropagation(); removeNote(n.id); };
         row.append(info, del);
-        row.onclick = () => n.mark && n.mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.onclick = () => {
+          if (!n.mark) { showToast('본문에서 이 코멘트의 위치를 찾지 못했습니다.'); return; }
+          n.mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          n.mark.classList.remove('rp-flash');
+          void n.mark.offsetWidth; // 재실행을 위해 리플로우 강제
+          n.mark.classList.add('rp-flash');
+        };
         listEl.appendChild(row);
       });
     }
