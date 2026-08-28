@@ -1,8 +1,10 @@
 /*!
  * review-notes.js — 리포트 검토용 인라인 코멘트 도구
  *
- * 페이지 본문에서 텍스트를 드래그하면 자체 팝업이 떠서 코멘트를 남길 수 있고,
- * 우측 하단 패널에서 목록 확인·개별/전체 삭제·코멘트 복사를 할 수 있다.
+ * 페이지 본문에서 텍스트를 드래그하면 선택 옆에 작은 '코멘트' 버튼이 뜨고, 그 버튼을
+ * 눌러야 입력창이 열린다(드래그만으로는 아무 것도 뜨지 않으므로 복사 등 다른 목적의
+ * 선택을 방해하지 않는다). 우측 하단 패널에서 목록 확인·개별/전체 삭제·코멘트 복사를
+ * 할 수 있다.
  * CSS 를 스스로 주입하므로 이 파일 하나만 붙이면 어떤 HTML 에서도 동작한다.
  *
  *   <script src="assets/review-notes.js" defer></script>
@@ -102,7 +104,15 @@
     opacity: 0; transition: opacity .2s; pointer-events: none; }
   #rpToast.show { opacity: .95; }
 
-  @media print { #reviewPanel, #rpModal, #rpToast { display: none !important; } }`;
+  /* 선택 직후 옆에 뜨는 작은 버튼 */
+  #rpSelBtn { position: fixed; z-index: 10002; border: none; cursor: pointer;
+    background: #3f4854; color: #f3f4f6; padding: 5px 10px; border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(15,23,42,.28);
+    font: 12px/1.2 system-ui, -apple-system, "Malgun Gothic", sans-serif; font-weight: 600; }
+  #rpSelBtn:hover { background: #4a5462; }
+  #rpSelBtn[hidden] { display: none; }
+
+  @media print { #reviewPanel, #rpModal, #rpToast, #rpSelBtn { display: none !important; } }`;
 
   function init() {
     var styleEl = document.createElement('style');
@@ -217,7 +227,7 @@
       panel.classList.toggle('has-notes', notes.length > 0);
       listEl.innerHTML = '';
       if (!notes.length) {
-        listEl.innerHTML = '<div class="rp-empty">본문에서 텍스트를 드래그해 메모를 남기세요.</div>';
+        listEl.innerHTML = '<div class="rp-empty">본문에서 텍스트를 드래그한 뒤 옆에 뜨는 버튼을 누르세요.</div>';
         return;
       }
       notes.forEach((n, i) => {
@@ -438,15 +448,7 @@
       if (sel) sel.removeAllRanges();
     }
 
-    document.addEventListener('mouseup', async (e) => {
-      if (modal.contains(e.target) || panel.contains(e.target)) return;
-      if (e.target.closest && e.target.closest('mark[data-note-id]')) return;  // 기존 표시 클릭
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) return;
-
-      // 팝업을 띄우기 전에 범위를 복제해 두고 선택은 즉시 해제한다.
-      // (선택을 남겨두면 다음 클릭의 mouseup 에서 같은 선택이 다시 잡혀 팝업이 반복된다)
-      const range = trimRange(sel.getRangeAt(0).cloneRange());
+    async function addNote(range) {
       clearSelection();
 
       // Selection.toString() 은 공백을 축약하지만 Range.toString() 은 원본 그대로다.
@@ -471,12 +473,9 @@
                    instruction: note, occ, mark });
       render();
       save();
-    });
+    }
 
-    // ── 표시된 부분 클릭 → 수정 / 삭제 ─────────────────────────
-    document.addEventListener('click', async (e) => {
-      const mark = e.target.closest && e.target.closest('mark[data-note-id]');
-      if (!mark) return;
+    async function editNote(mark) {
       const n = notes.find(x => x.id === mark.dataset.noteId);
       if (!n) return;
       clearSelection();
@@ -489,21 +488,92 @@
       mark.title = n.instruction + ' (클릭: 수정/삭제)';
       render();
       save();
+    }
+
+    // ── 선택 직후 뜨는 작은 버튼 ───────────────────────────────
+    // 드래그하자마자 입력창을 띄우면 성가시므로, 버튼을 한 번 눌러야 열리게 한다.
+    const selBtn = document.createElement('button');
+    selBtn.id = 'rpSelBtn';
+    selBtn.type = 'button';
+    selBtn.textContent = '\uD83D\uDCAC 코멘트';
+    selBtn.title = '선택한 부분에 코멘트 추가';
+    selBtn.hidden = true;
+    document.body.appendChild(selBtn);
+
+    let pendingRange = null;
+
+    function hideSelBtn() { selBtn.hidden = true; pendingRange = null; }
+
+    // 버튼을 누르는 순간 선택이 풀리지 않도록 기본 동작을 막는다.
+    selBtn.addEventListener('mousedown', e => e.preventDefault());
+    selBtn.onclick = () => {
+      const r = pendingRange;
+      hideSelBtn();
+      if (r) addNote(r);
+    };
+
+    function showSelBtn(range) {
+      pendingRange = range;
+      selBtn.hidden = false;
+      // 선택의 끝부분 오른쪽 아래에 붙인다.
+      const rects = range.getClientRects();
+      const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+      const w = selBtn.offsetWidth, h = selBtn.offsetHeight;
+      let x = rect.right + 6;
+      let y = rect.bottom + 6;
+      if (x + w + 8 > window.innerWidth) x = Math.max(4, window.innerWidth - w - 8);
+      if (y + h + 8 > window.innerHeight) y = Math.max(4, rect.top - h - 6);
+      selBtn.style.left = x + 'px';
+      selBtn.style.top = y + 'px';
+    }
+
+    document.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;   // 우클릭은 컨텍스트 메뉴 쪽에서 처리한다
+      if (selBtn.contains(e.target)) return;
+      if (modal.contains(e.target) || panel.contains(e.target)) { hideSelBtn(); return; }
+      if (e.target.closest && e.target.closest('mark[data-note-id]')) { hideSelBtn(); return; }
+      // 클릭으로 선택이 풀리는 처리가 끝난 뒤에 판단한다.
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || !sel.rangeCount) { hideSelBtn(); return; }
+        const range = trimRange(sel.getRangeAt(0).cloneRange());
+        if (!collapse(range.toString())) { hideSelBtn(); return; }
+        showSelBtn(range);
+      }, 0);
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      if (!selBtn.hidden && !selBtn.contains(e.target)) hideSelBtn();
+    }, true);
+    document.addEventListener('scroll', hideSelBtn, true);
+    window.addEventListener('resize', hideSelBtn);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideSelBtn();
+    });
+
+    // ── 표시된 부분 클릭 → 수정 / 삭제 ─────────────────────────
+    document.addEventListener('click', (e) => {
+      const mark = e.target.closest && e.target.closest('mark[data-note-id]');
+      if (mark) editNote(mark);
     });
 
     // ── 복사 ───────────────────────────────────────────────────
+    function copyText(text, msg) {
+      const done = () => showToast(msg);
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);   // file:// 로 열었을 때 대비
+      }
+    }
+
     panel.querySelector('.rp-copy').onclick = () => {
       if (!notes.length) return showToast('남긴 코멘트가 없습니다.');
-      let result = '다음 텍스트에서 각 코멘트를 반영해 수정해줘:\n\n';
+      let result = '';
       notes.forEach((n, idx) => {
         result += '[수정대상 ' + (idx + 1) + ']\n- 원문: "' + n.display + '"\n- 코멘트: ' + n.instruction + '\n\n';
       });
-      const done = () => showToast('코멘트 ' + notes.length + '건을 클립보드에 복사했습니다.');
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(result).then(done, () => fallbackCopy(result, done));
-      } else {
-        fallbackCopy(result, done);   // file:// 로 열었을 때 대비
-      }
+      copyText(result, '코멘트 ' + notes.length + '건을 클립보드에 복사했습니다.');
     };
 
     function fallbackCopy(text, done) {

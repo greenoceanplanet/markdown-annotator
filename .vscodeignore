@@ -1,0 +1,6 @@
+.git/**
+.gitignore
+.vscodeignore
+node_modules/**
+pnpm-lock.yaml
+*.vsix
