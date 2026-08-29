@@ -268,8 +268,10 @@
       try {
         if (!notes.length) { localStorage.removeItem(STORE_KEY); return; }
         localStorage.setItem(STORE_KEY, JSON.stringify(
-          notes.map(n => ({ id: n.id, original: n.original, display: n.display,
-                            instruction: n.instruction, occ: n.occ }))
+          notes.map(n => ({
+            id: n.id, original: n.original, display: n.display,
+            instruction: n.instruction, occ: n.occ
+          }))
         ));
       } catch (err) {
         /* 사생활 보호 모드 등 저장이 막힌 환경 */
@@ -346,13 +348,13 @@
       for (let i = 0; i < 500; i++) {
         const c = r.startContainer;
         if (c.nodeType === 3 && r.startOffset < c.nodeValue.length &&
-            /\s/.test(c.nodeValue[r.startOffset])) { r.setStart(c, r.startOffset + 1); }
+          /\s/.test(c.nodeValue[r.startOffset])) { r.setStart(c, r.startOffset + 1); }
         else break;
       }
       for (let i = 0; i < 500; i++) {
         const c = r.endContainer;
         if (c.nodeType === 3 && r.endOffset > 0 &&
-            /\s/.test(c.nodeValue[r.endOffset - 1])) { r.setEnd(c, r.endOffset - 1); }
+          /\s/.test(c.nodeValue[r.endOffset - 1])) { r.setEnd(c, r.endOffset - 1); }
         else break;
       }
       return r;
@@ -396,9 +398,11 @@
       saved.forEach(rec => {
         if (!rec || !rec.original || !rec.instruction) return;
         seq = Math.max(seq, parseInt(rec.id, 10) || 0);
-        const note = { id: String(rec.id), original: rec.original,
-                       display: rec.display || collapse(rec.original),
-                       instruction: rec.instruction, occ: rec.occ || 1, mark: null };
+        const note = {
+          id: String(rec.id), original: rec.original,
+          display: rec.display || collapse(rec.original),
+          instruction: rec.instruction, occ: rec.occ || 1, mark: null
+        };
         const r = rangeForOccurrence(rec.original, note.occ);
         if (r) {
           try {
@@ -469,8 +473,10 @@
         showToast('이 범위에는 표시를 넣을 수 없습니다. 한 문단 안에서 선택해 주세요.');
         return;
       }
-      notes.push({ id: mark.dataset.noteId, original: raw, display: text,
-                   instruction: note, occ, mark });
+      notes.push({
+        id: mark.dataset.noteId, original: raw, display: text,
+        instruction: note, occ, mark
+      });
       render();
       save();
     }
@@ -571,7 +577,7 @@
       if (!notes.length) return showToast('남긴 코멘트가 없습니다.');
       let result = '';
       notes.forEach((n, idx) => {
-        result += '[수정대상 ' + (idx + 1) + ']\n- 원문: "' + n.display + '"\n- 코멘트: ' + n.instruction + '\n\n';
+        result += '[검토대상 ' + (idx + 1) + ']\n- 본문: "' + n.display + '"\n- 코멘트: ' + n.instruction + '\n\n';
       });
       copyText(result, '코멘트 ' + notes.length + '건을 클립보드에 복사했습니다.');
     };
