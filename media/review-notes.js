@@ -261,13 +261,34 @@
     }
 
     // ── 저장/복원 (localStorage) ───────────────────────────────
-    // 페이지마다 따로 저장한다. file:// 로 열면 경로가 곧 구분자다.
-    const STORE_KEY = 'reviewNotes:v2:' + location.pathname;
+    // 파일마다 따로 저장한다. 프리뷰는 file:// 이 아니라 webview 라서
+    // location.pathname 은 어느 문서를 열든 늘 같다(/index.html). 그걸 열쇠로
+    // 쓰면 모든 마크다운이 같은 칸을 공유해 남의 코멘트가 딸려 나온다.
+    // 프리뷰가 심어 두는 설정에서 실제 문서 URI(source)를 꺼내 쓴다.
+    function docKey() {
+      try {
+        const el = document.getElementById('vscode-markdown-preview-data');
+        const raw = el && el.getAttribute('data-settings');
+        const src = raw && JSON.parse(raw).source;
+        if (src) return src;
+      } catch (err) {
+        /* 설정이 없거나 형식이 다른 환경 */
+      }
+      return location.pathname;   // 프리뷰 밖(브라우저 등)에서의 대비책
+    }
+
+    // 스크립트가 meta 태그보다 먼저 실행될 수도 있으니 값을 미리 굳히지 않고,
+    // 처음 쓸 때 한 번 구해서 기억한다.
+    let storeKey = null;
+    function key() {
+      if (storeKey === null) storeKey = 'reviewNotes:v3:' + docKey();
+      return storeKey;
+    }
 
     function save() {
       try {
-        if (!notes.length) { localStorage.removeItem(STORE_KEY); return; }
-        localStorage.setItem(STORE_KEY, JSON.stringify(
+        if (!notes.length) { localStorage.removeItem(key()); return; }
+        localStorage.setItem(key(), JSON.stringify(
           notes.map(n => ({
             id: n.id, original: n.original, display: n.display,
             instruction: n.instruction, occ: n.occ
@@ -303,11 +324,26 @@
       return c;
     }
 
+    // 저장할 때와 복원할 때 같은 본문 문자열을 봐야 한다. 예전엔 document.body
+    // 전체를 Range 로 직렬화했는데, 거기엔 코멘트 목록 패널 텍스트까지 섞여
+    // 들어가 등장 횟수가 부풀려졌다(복원 시 그 번째 등장이 없어 실패).
     function occurrenceOf(range, text) {
+      const nodes = contentTextNodes();
       const pre = document.createRange();
       pre.setStart(document.body, 0);
       pre.setEnd(range.startContainer, range.startOffset);
-      return countUpTo(pre.toString() + text, text);
+
+      // 문서 순서대로 훑다가 선택 시작점에 닿으면 멈춘다.
+      let before = '';
+      for (const n of nodes) {
+        if (n === range.startContainer) {
+          before += n.nodeValue.slice(0, range.startOffset);
+          break;
+        }
+        if (pre.comparePoint(n, 0) > 0) break;   // 시작점보다 뒤 → 그만
+        before += n.nodeValue;
+      }
+      return countUpTo(before + text, text);
     }
 
     // occ 번째 등장 위치를 다시 찾아 Range 로 돌려준다(못 찾으면 null).
@@ -382,14 +418,18 @@
       attempt = attempt || 0;
       let saved = [];
       try {
-        saved = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+        saved = JSON.parse(localStorage.getItem(key()) || '[]');
       } catch (err) {
         return;
       }
       if (!Array.isArray(saved) || !saved.length) return;
 
-      const bodyReady = contentTextNodes().some(n => n.nodeValue.trim());
-      if (!bodyReady && attempt < 20) {
+      // "글자가 하나라도 있으면 준비됨"으로 보면, 프리뷰가 본문을 조금씩 채우는
+      // 도중에 통과해 버려 아직 없는 문단의 코멘트를 잃는다. 저장된 원문이 모두
+      // 본문에 보일 때까지 기다리고, 그래도 안 되면 마지막에 있는 대로 복원한다.
+      const allFound = saved.every(rec =>
+        rec && rec.original && rangeForOccurrence(rec.original, rec.occ || 1));
+      if (!allFound && attempt < 20) {
         setTimeout(() => restore(attempt + 1), 150);
         return;
       }
