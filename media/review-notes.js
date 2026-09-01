@@ -94,10 +94,12 @@
   #rpModal .rp-dlg { background: #fff; border-radius: 10px; width: min(520px, 92vw);
     box-shadow: 0 10px 40px rgba(0,0,0,.3); overflow: hidden; }
   #rpModal.rp-positioned .rp-dlg { position: fixed; margin: 0; }
+  #rpModal .rp-titlebar { height: 14px; cursor: move; user-select: none;
+    background: repeating-linear-gradient(90deg, #d0d7de 0 2px, transparent 2px 6px);
+    background-size: 100% 2px; background-position: center; background-repeat: no-repeat; }
   #rpModal .rp-quote { padding: 12px 16px; background: #f4f5f7; border-bottom: 1px solid #dfe3e8;
-    color: #444c56; max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 13px;
-    cursor: move; user-select: none; }
-  #rpModal .rp-label { padding: 12px 16px 0; font-weight: bold; cursor: move; user-select: none; }
+    color: #444c56; max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 13px; }
+  #rpModal .rp-label { padding: 12px 16px 0; font-weight: bold; }
   #rpModal .rp-input { margin: 8px 16px 0; width: calc(100% - 32px); box-sizing: border-box;
     min-height: 76px; padding: 8px 10px; border: 1px solid #d0d7de; border-radius: 6px;
     font: inherit; resize: vertical; }
@@ -151,6 +153,7 @@
     modal.hidden = true;
     modal.innerHTML =
       '<div class="rp-dlg" role="dialog" aria-modal="true">' +
+      '<div class="rp-titlebar" title="드래그해서 이동"></div>' +
       '<div class="rp-quote"></div>' +
       '<div class="rp-label"></div>' +
       '<textarea class="rp-input"></textarea>' +
@@ -212,8 +215,7 @@
       mDlg.style.top = top + 'px';
     });
     document.addEventListener('mouseup', () => { dragging = false; });
-    mQuote.addEventListener('mousedown', startDrag);
-    mLabel.addEventListener('mousedown', startDrag);
+    mDlg.querySelector('.rp-titlebar').addEventListener('mousedown', startDrag);
 
     // opts: { quote, label, value, showInput, showRemove, okText }
     function openModal(opts) {
@@ -821,17 +823,18 @@
       if (r) addHighlight(r);
     };
 
-    function showSelBtn(range) {
+    function showSelBtn(range, atX, atY) {
       pendingRange = range;
       selBar.hidden = false;
-      // 선택의 끝부분 오른쪽 아래에 붙인다.
+      // 마우스를 놓은 지점(atX/atY) 바로 옆에 붙인다. 좌표가 없으면(키보드 선택 등)
+      // 선택의 끝부분 오른쪽 아래로 대체한다.
       const rects = range.getClientRects();
       const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
       const w = selBar.offsetWidth, h = selBar.offsetHeight;
-      let x = rect.right + 6;
-      let y = rect.bottom + 6;
+      let x = (atX != null ? atX : rect.right) + 10;
+      let y = (atY != null ? atY : rect.bottom) + 10;
       if (x + w + 8 > window.innerWidth) x = Math.max(4, window.innerWidth - w - 8);
-      if (y + h + 8 > window.innerHeight) y = Math.max(4, rect.top - h - 6);
+      if (y + h + 8 > window.innerHeight) y = Math.max(4, (atY != null ? atY : rect.top) - h - 10);
       selBar.style.left = x + 'px';
       selBar.style.top = y + 'px';
     }
@@ -847,7 +850,7 @@
         if (!sel || sel.isCollapsed || !sel.rangeCount) { hideSelBtn(); return; }
         const range = trimRange(sel.getRangeAt(0).cloneRange());
         if (!collapse(range.toString())) { hideSelBtn(); return; }
-        showSelBtn(range);
+        showSelBtn(range, e.clientX, e.clientY);
       }, 0);
     });
 
@@ -912,6 +915,28 @@
     render();
     restore();
     restoreHighlights();
+
+    // VSCode 마크다운 프리뷰는 파일이 바뀌면(에이전트의 편집 포함) 스크립트를
+    // 다시 로드하지 않고 본문 DOM 만 통째로 새로 그린다. 그러면 우리가 심어둔
+    // <mark> 가 다 같이 날아가는데, 이 스크립트는 이미 로드된 상태(맨 위 가드)라
+    // 재실행되지 않아 복원도 다시 일어나지 않는다. 본문에 있던 mark 가 갑자기
+    // 하나도 안 남으면 본문이 새로 그려진 것으로 보고 다시 칠한다.
+    const contentRoot = document.body;
+    const bodyObserver = new MutationObserver(() => {
+      const hadAny = notes.some(n => n.mark) || highlights.some(h => h.mark);
+      if (!hadAny) return;
+      const stillThere = contentRoot.querySelector('mark[data-note-id], mark[data-hl-id]');
+      if (stillThere) return;   // 우리 mark 가 하나라도 남아 있으면 정상 상태
+      // 다시 칠하는 동안 우리 스스로가 만드는 DOM 변경엔 반응하지 않도록 잠시 끊는다.
+      bodyObserver.disconnect();
+      notes.length = 0;
+      highlights.length = 0;
+      render();
+      restore();
+      restoreHighlights();
+      bodyObserver.observe(contentRoot, { childList: true, subtree: true });
+    });
+    bodyObserver.observe(contentRoot, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
