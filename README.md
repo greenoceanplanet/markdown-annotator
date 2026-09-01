@@ -36,13 +36,24 @@
 
 ## 설치
 
+1. [Releases](../../releases/latest) 페이지에서 최신 `review-notes-x.x.x.vsix` 파일을 다운로드합니다.
+2. VS Code를 열고 왼쪽 사이드바에서 **확장(Extensions)** 아이콘을 클릭합니다 (또는 `Ctrl+Shift+X`).
+3. 확장 패널 오른쪽 위의 **···** (더보기) 메뉴를 클릭합니다.
+4. **VSIX에서 설치...(Install from VSIX...)** 를 선택합니다.
+5. 방금 다운로드한 `.vsix` 파일을 선택합니다.
+6. 설치가 끝나면 VS Code를 재시작하거나 창을 다시 로드합니다.
+
+## 개발자용 — 소스에서 빌드/설치
+
+이 저장소를 직접 수정하며 개발할 때는 아래처럼 로컬에서 패키징·설치합니다.
+
 ```
 pnpm run package
 ```
 
 생성된 `.vsix` 파일을 VSCode에서 `Ctrl+Shift+P` → `Extensions: Install from VSIX...`로 설치합니다.
 
-## 업데이트
+### 업데이트
 
 `media/review-notes.js` 등을 수정한 뒤 실제 확장에 반영하려면 다시 패키징하고 재설치해야 합니다.
 
