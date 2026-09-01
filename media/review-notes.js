@@ -18,13 +18,16 @@
   if (window.__reviewNotesLoaded) return;
   window.__reviewNotesLoaded = true;
 
-  var CSS = `  mark[data-note-id] { background: #e8e3d3; box-shadow: inset 0 -2px 0 #b8ae93; cursor: pointer; }
-  mark[data-note-id]:hover { background: #dcd5bd; }
+  var CSS = `  mark[data-note-id] { background: #e8e3d3 !important; box-shadow: inset 0 -2px 0 #b8ae93; cursor: pointer; color: inherit; }
+  mark[data-note-id]:hover { background: #dcd5bd !important; }
   mark[data-note-id].rp-flash { animation: rp-flash-anim 1s ease; }
   @keyframes rp-flash-anim {
     0%, 100% { background: #e8e3d3; }
     30% { background: #ffe58a; }
   }
+  mark[data-hl-id] { background: #fff59d !important; box-shadow: inset 0 -2px 0 #e6d34d; cursor: pointer; color: inherit; }
+  mark[data-hl-id]:hover { background: #ffee80 !important; }
+  mark[data-hl-id].rp-flash { animation: rp-flash-anim 1s ease; }
 
   /* 코멘트 패널 — 머리말과 버튼이 한 장의 카드로 보이도록 묶는다. */
   /* 평소엔 반투명하게 비켜 있다가, 마우스를 올리면 또렷해진다. */
@@ -36,7 +39,10 @@
     opacity: .72; transition: opacity .15s, box-shadow .15s; }
   #reviewPanel:hover, #reviewPanel:focus-within { opacity: 1;
     box-shadow: 0 10px 28px rgba(15,23,42,.24), 0 0 0 1px rgba(15,23,42,.1); }
-  #reviewPanel.collapsed { width: 138px; }
+  #reviewPanel.collapsed { width: auto; }
+  #reviewPanel.collapsed:not(.has-notes) { opacity: .35; }
+  #reviewPanel.collapsed:not(.has-notes):hover,
+  #reviewPanel.collapsed:not(.has-notes):focus-within { opacity: .85; }
 
   #reviewPanel .rp-head { display: flex; gap: 6px; align-items: center;
     background: #3f4854; color: #f3f4f6; padding: 7px 10px;
@@ -45,6 +51,9 @@
   #reviewPanel .rp-head span { flex: 1; white-space: nowrap; }
   #reviewPanel .rp-head i { font-style: normal; opacity: .75; }
   #reviewPanel .rp-head .rp-count { font-variant-numeric: tabular-nums; }
+  #reviewPanel .rp-head .rp-label { font-style: normal; }
+  #reviewPanel.collapsed .rp-head .rp-label,
+  #reviewPanel.collapsed .rp-head i { display: none; }
   #reviewPanel .rp-head button { background: none; border: none; color: inherit;
     opacity: .7; cursor: pointer; font-size: 10px; padding: 2px; line-height: 1; }
   #reviewPanel .rp-head button:hover { opacity: 1; }
@@ -66,9 +75,7 @@
   #reviewPanel .rp-del:hover { background: #fdecec; color: #c0392b; }
 
   #reviewPanel .rp-foot { display: flex; background: #fff; border-top: 1px solid #eceef1; }
-  /* 접혀 있어도 코멘트가 있으면 복사 버튼은 남겨 둔다. */
-  #reviewPanel.collapsed:not(.has-notes) .rp-foot { display: none; }
-  #reviewPanel.collapsed .rp-clear { display: none; }
+  #reviewPanel.collapsed .rp-foot { display: none; }
   #reviewPanel .rp-foot button { flex: 1; padding: 9px 6px; border: none; cursor: pointer;
     background: none; font: inherit; font-weight: 600; color: #5b6472; }
   #reviewPanel .rp-foot button:hover { background: #f1f3f6; color: #1f2430; }
@@ -95,6 +102,8 @@
     border: 1px solid #d0d7de; background: #fff; font: inherit; }
   #rpModal .rp-btns button.rp-ok { background: #374151; color: #fff; border-color: #374151; font-weight: bold; }
   #rpModal .rp-btns button.rp-danger { color: #b00; }
+  #rpModal .rp-btns button.rp-copy-input { background: #eaf7ee; color: #1a7f37; border-color: #b7dfc2; }
+  #rpModal .rp-btns button.rp-copy-input:hover { background: #dcf0e2; }
   #rpModal .rp-hint { padding: 0 16px; color: #888; font-size: 12px; }
 
   /* 토스트(alert 대체) */
@@ -104,15 +113,19 @@
     opacity: 0; transition: opacity .2s; pointer-events: none; }
   #rpToast.show { opacity: .95; }
 
-  /* 선택 직후 옆에 뜨는 작은 버튼 */
-  #rpSelBtn { position: fixed; z-index: 10002; border: none; cursor: pointer;
-    background: #3f4854; color: #f3f4f6; padding: 5px 10px; border-radius: 6px;
+  /* 선택 직후 옆에 뜨는 작은 버튼들 */
+  #rpSelBar { position: fixed; z-index: 10002; display: flex; gap: 4px; }
+  #rpSelBar[hidden] { display: none; }
+  #rpSelBar button { border: none; cursor: pointer; opacity: .8; transition: opacity .12s;
+    background: #3f4854; color: #f3f4f6; width: 28px; height: 28px; padding: 0;
+    display: flex; align-items: center; justify-content: center; border-radius: 6px;
     box-shadow: 0 4px 12px rgba(15,23,42,.28);
-    font: 12px/1.2 system-ui, -apple-system, "Malgun Gothic", sans-serif; font-weight: 600; }
-  #rpSelBtn:hover { background: #4a5462; }
-  #rpSelBtn[hidden] { display: none; }
+    font: 14px/1 system-ui, -apple-system, "Malgun Gothic", sans-serif; font-weight: 600; }
+  #rpSelBar button:hover { background: #4a5462; opacity: 1; }
+  #rpSelBar button.rp-hl-btn { background: #fff59d; color: #5b5220; }
+  #rpSelBar button.rp-hl-btn:hover { background: #ffee80; opacity: 1; }
 
-  @media print { #reviewPanel, #rpModal, #rpToast, #rpSelBtn { display: none !important; } }`;
+  @media print { #reviewPanel, #rpModal, #rpToast, #rpSelBar { display: none !important; } }`;
 
   function init() {
     var styleEl = document.createElement('style');
@@ -124,7 +137,9 @@
 
   function setup() {
     const notes = [];
+    const highlights = [];
     let seq = 0;
+    let hlSeq = 0;
 
     // ── 자체 팝업 ─────────────────────────────────────────────
     const modal = document.createElement('div');
@@ -138,6 +153,7 @@
       '<div class="rp-hint">Ctrl+Enter 확인 · Esc 취소</div>' +
       '<div class="rp-btns">' +
       '<button class="rp-remove rp-danger">삭제</button>' +
+      '<button class="rp-copy-input">📋 복사</button>' +
       '<button class="rp-cancel">취소</button>' +
       '<button class="rp-ok">확인</button>' +
       '</div>' +
@@ -149,9 +165,11 @@
     const mInput = modal.querySelector('.rp-input');
     const mHint = modal.querySelector('.rp-hint');
     const mRemove = modal.querySelector('.rp-remove');
+    const mCopy = modal.querySelector('.rp-copy-input');
     const mCancel = modal.querySelector('.rp-cancel');
     const mOk = modal.querySelector('.rp-ok');
     let resolveModal = null;
+    let modalLine = null;
 
     function closeModal(value) {
       modal.hidden = true;
@@ -170,6 +188,9 @@
       mInput.style.display = mHint.style.display = withInput ? '' : 'none';
       mInput.value = opts.value || '';
       mRemove.style.display = opts.showRemove ? '' : 'none';
+      modalLine = opts.line || null;
+      // 코멘트 작성/수정 팝업(인용문 + 입력창)에서만 복사 버튼을 보인다.
+      mCopy.style.display = (withInput && opts.quote) ? '' : 'none';
       mOk.textContent = opts.okText || '확인';
       modal.hidden = false;
       if (withInput) { mInput.focus(); mInput.select(); } else { mOk.focus(); }
@@ -179,6 +200,15 @@
     mOk.onclick = () => closeModal(mInput.style.display === 'none' ? true : mInput.value.trim());
     mCancel.onclick = () => closeModal(null);
     mRemove.onclick = () => closeModal('__remove__');
+    // LLM에 바로 붙여넣을 수 있도록 '코멘트 복사'와 같은 템플릿으로 복사한다(팝업은 닫지 않는다).
+    mCopy.onclick = () => {
+      const src = sourceUri();
+      const header = src ? '파일: ' + displayPath(src) + '\n\n' : '';
+      const body = '[검토대상]\n' +
+        (modalLine ? '- 위치: L' + modalLine + '\n' : '') +
+        '- 본문: "' + mQuote.textContent + '"\n- 코멘트: ' + mInput.value.trim() + '\n\n';
+      copyText(header + body, '복사했습니다.');
+    };
     modal.addEventListener('mousedown', (e) => { if (e.target === modal) closeModal(null); });
     modal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); closeModal(null); }
@@ -200,7 +230,7 @@
     const panel = document.createElement('div');
     panel.id = 'reviewPanel';
     panel.innerHTML =
-      '<div class="rp-head"><span>📝 코멘트 <b class="rp-count">0</b><i>건</i></span>' +
+      '<div class="rp-head"><span>📝 <em class="rp-label">코멘트 </em><b class="rp-count">0</b><i>건</i></span>' +
       '<button class="rp-toggle">▲</button></div>' +
       '<div class="rp-body"></div>' +
       '<div class="rp-foot"><button class="rp-clear">비우기</button>' +
@@ -237,7 +267,9 @@
         const orig = document.createElement('div');
         orig.className = 'rp-orig';
         // 본문에서 위치를 못 찾은 코멘트는 표시해 둔다.
-        orig.textContent = (i + 1) + '. ' + (n.mark ? '' : '⚠ ') + '"' + n.display + '"';
+        const ln = (n.mark && lineOf(n.mark)) || n.line;
+        orig.textContent = (i + 1) + '. ' + (n.mark ? '' : '⚠ ') +
+          (ln ? 'L' + ln + ' ' : '') + '"' + n.display + '"';
         if (!n.mark) orig.title = '본문이 바뀌어 이 문구를 찾지 못했습니다.';
         const ins = document.createElement('div');
         ins.className = 'rp-ins';
@@ -265,16 +297,27 @@
     // location.pathname 은 어느 문서를 열든 늘 같다(/index.html). 그걸 열쇠로
     // 쓰면 모든 마크다운이 같은 칸을 공유해 남의 코멘트가 딸려 나온다.
     // 프리뷰가 심어 두는 설정에서 실제 문서 URI(source)를 꺼내 쓴다.
-    function docKey() {
+    function sourceUri() {
       try {
         const el = document.getElementById('vscode-markdown-preview-data');
         const raw = el && el.getAttribute('data-settings');
-        const src = raw && JSON.parse(raw).source;
-        if (src) return src;
+        return (raw && JSON.parse(raw).source) || null;
       } catch (err) {
-        /* 설정이 없거나 형식이 다른 환경 */
+        return null;   // 설정이 없거나 형식이 다른 환경
       }
-      return location.pathname;   // 프리뷰 밖(브라우저 등)에서의 대비책
+    }
+
+    function docKey() {
+      return sourceUri() || location.pathname;   // 프리뷰 밖에서의 대비책
+    }
+
+    // file:///d%3A/a/b.md 같은 URI 를 d:/a/b.md 로 편다.
+    // 에이전트가 그대로 열 수 있는 형태가 낫다.
+    function displayPath(uri) {
+      if (!uri) return null;
+      let p = String(uri).replace(/^file:\/\/\//, '');
+      try { p = decodeURIComponent(p); } catch (err) { /* 잘못된 이스케이프 */ }
+      return p;
     }
 
     // 스크립트가 meta 태그보다 먼저 실행될 수도 있으니 값을 미리 굳히지 않고,
@@ -285,14 +328,34 @@
       return storeKey;
     }
 
+    let hlStoreKey = null;
+    function hlKey() {
+      if (hlStoreKey === null) hlStoreKey = 'reviewHighlights:v1:' + docKey();
+      return hlStoreKey;
+    }
+
     function save() {
       try {
-        if (!notes.length) { localStorage.removeItem(key()); return; }
-        localStorage.setItem(key(), JSON.stringify(
-          notes.map(n => ({
-            id: n.id, original: n.original, display: n.display,
-            instruction: n.instruction, occ: n.occ
-          }))
+        if (!notes.length) { localStorage.removeItem(key()); }
+        else {
+          localStorage.setItem(key(), JSON.stringify(
+            notes.map(n => ({
+              id: n.id, original: n.original, display: n.display,
+              instruction: n.instruction, occ: n.occ, line: n.line
+            }))
+          ));
+        }
+      } catch (err) {
+        /* 사생활 보호 모드 등 저장이 막힌 환경 */
+      }
+      saveHighlights();
+    }
+
+    function saveHighlights() {
+      try {
+        if (!highlights.length) { localStorage.removeItem(hlKey()); return; }
+        localStorage.setItem(hlKey(), JSON.stringify(
+          highlights.map(h => ({ id: h.id, original: h.original, occ: h.occ }))
         ));
       } catch (err) {
         /* 사생활 보호 모드 등 저장이 막힌 환경 */
@@ -411,6 +474,15 @@
       return mark;
     }
 
+    function wrapHighlight(range, id) {
+      const mark = document.createElement('mark');
+      mark.dataset.hlId = id;
+      mark.title = '클릭: 형광펜 지우기';
+      mark.appendChild(range.extractContents());
+      range.insertNode(mark);
+      return mark;
+    }
+
     // 마크다운 프리뷰는 본문을 비동기로 채워 넣을 때가 있어, DOMContentLoaded
     // 시점엔 아직 텍스트가 비어 있거나 일부만 있을 수 있다. 그 상태에서 바로
     // 복원을 시도하면 원문을 못 찾으므로, 본문이 채워질 때까지 잠시 재시도한다.
@@ -441,12 +513,15 @@
         const note = {
           id: String(rec.id), original: rec.original,
           display: rec.display || collapse(rec.original),
-          instruction: rec.instruction, occ: rec.occ || 1, mark: null
+          instruction: rec.instruction, occ: rec.occ || 1,
+          line: rec.line || null, mark: null
         };
         const r = rangeForOccurrence(rec.original, note.occ);
         if (r) {
           try {
             note.mark = wrap(r, note.id, rec.instruction + ' (클릭: 수정/삭제)');
+            // 본문이 편집됐을 수 있으니 지금 위치에서 줄 번호를 다시 읽는다.
+            note.line = lineOf(note.mark) || note.line;
           } catch (err) {
             lost++;   // 다시 감쌀 수 없는 범위
           }
@@ -457,6 +532,37 @@
       });
       render();
       if (lost) showToast('코멘트 ' + lost + '건은 본문에서 위치를 찾지 못했습니다(내용은 남아 있음).');
+    }
+
+    function restoreHighlights(attempt) {
+      attempt = attempt || 0;
+      let saved = [];
+      try {
+        saved = JSON.parse(localStorage.getItem(hlKey()) || '[]');
+      } catch (err) {
+        return;
+      }
+      if (!Array.isArray(saved) || !saved.length) return;
+
+      const allFound = saved.every(rec =>
+        rec && rec.original && rangeForOccurrence(rec.original, rec.occ || 1));
+      if (!allFound && attempt < 20) {
+        setTimeout(() => restoreHighlights(attempt + 1), 150);
+        return;
+      }
+
+      saved.forEach(rec => {
+        if (!rec || !rec.original) return;
+        hlSeq = Math.max(hlSeq, parseInt(rec.id, 10) || 0);
+        const r = rangeForOccurrence(rec.original, rec.occ || 1);
+        if (!r) return;
+        try {
+          const mark = wrapHighlight(r, String(rec.id));
+          highlights.push({ id: String(rec.id), original: rec.original, occ: rec.occ || 1, mark });
+        } catch (err) {
+          /* 다시 감쌀 수 없는 범위는 건너뛴다 */
+        }
+      });
     }
 
     // ── 삭제: 코멘트 + 본문 하이라이트 원복 ──────────────────
@@ -492,6 +598,21 @@
       if (sel) sel.removeAllRanges();
     }
 
+    // 프리뷰는 스크롤 동기화를 위해 블록 요소마다 data-line 을 달아 둔다(0-based).
+    // 마크다운 문단은 줄바꿈 없이 한 줄이므로, 블록의 시작 줄이 곧 그 문구가
+    // 있는 줄이다. 원본 .md 의 줄 번호로 되돌려 준다. 못 찾으면 null.
+    function lineOf(node) {
+      let el = node && (node.nodeType === 1 ? node : node.parentElement);
+      for (; el && el !== document.body; el = el.parentElement) {
+        const v = el.getAttribute && el.getAttribute('data-line');
+        if (v !== null && v !== undefined && v !== '') {
+          const n = parseInt(v, 10);
+          if (!isNaN(n)) return n + 1;   // 0-based -> 사람이 세는 1-based
+        }
+      }
+      return null;
+    }
+
     async function addNote(range) {
       clearSelection();
 
@@ -501,7 +622,9 @@
       const text = collapse(raw);
       if (!text) return;
 
-      const note = await openModal({ quote: text, label: '이 부분에 대한 코멘트:' });
+      // mark 를 넣기 전이라 range 시작 위치로 줄번호를 미리 구해 둔다(팝업 복사 버튼용).
+      const line = lineOf(range.startContainer);
+      const note = await openModal({ quote: text, label: '이 부분에 대한 코멘트:', line });
       if (!note) return;
 
       // mark 를 넣기 전에 '몇 번째 등장'인지 세어 둔다(넣고 나면 순번이 흔들린다).
@@ -515,10 +638,41 @@
       }
       notes.push({
         id: mark.dataset.noteId, original: raw, display: text,
-        instruction: note, occ, mark
+        instruction: note, occ, line: lineOf(mark), mark
       });
       render();
       save();
+    }
+
+    function addHighlight(range) {
+      clearSelection();
+      const raw = range.toString();
+      if (!collapse(raw)) return;
+
+      const occ = occurrenceOf(range, raw);
+      let mark;
+      try {
+        mark = wrapHighlight(range, String(++hlSeq));
+      } catch (err) {
+        showToast('이 범위에는 형광펜을 칠할 수 없습니다. 한 문단 안에서 선택해 주세요.');
+        return;
+      }
+      highlights.push({ id: mark.dataset.hlId, original: raw, occ, mark });
+      saveHighlights();
+    }
+
+    function removeHighlight(id) {
+      const i = highlights.findIndex(h => h.id === id);
+      if (i < 0) return;
+      const mark = highlights[i].mark;
+      if (mark && mark.parentNode) {
+        const parent = mark.parentNode;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+        parent.normalize();
+      }
+      highlights.splice(i, 1);
+      saveHighlights();
     }
 
     async function editNote(mark) {
@@ -527,6 +681,7 @@
       clearSelection();
       const next = await openModal({
         quote: n.display, label: '코멘트:', value: n.instruction, showRemove: true,
+        line: (n.mark && lineOf(n.mark)) || n.line,
       });
       if (next === null) return;
       if (next === '__remove__' || next === '') { removeNote(n.id); return; }
@@ -536,48 +691,56 @@
       save();
     }
 
-    // ── 선택 직후 뜨는 작은 버튼 ───────────────────────────────
+    // ── 선택 직후 뜨는 작은 버튼들(코멘트 · 형광펜) ───────────────
     // 드래그하자마자 입력창을 띄우면 성가시므로, 버튼을 한 번 눌러야 열리게 한다.
-    const selBtn = document.createElement('button');
-    selBtn.id = 'rpSelBtn';
-    selBtn.type = 'button';
-    selBtn.textContent = '\uD83D\uDCAC 코멘트';
-    selBtn.title = '선택한 부분에 코멘트 추가';
-    selBtn.hidden = true;
-    document.body.appendChild(selBtn);
+    const selBar = document.createElement('div');
+    selBar.id = 'rpSelBar';
+    selBar.hidden = true;
+    selBar.innerHTML =
+      '<button type="button" class="rp-note-btn" title="선택한 부분에 코멘트 추가">\uD83D\uDCAC</button>' +
+      '<button type="button" class="rp-hl-btn" title="선택한 부분에 형광펜 표시">\uD83D\uDD8D</button>';
+    document.body.appendChild(selBar);
+
+    const selBtn = selBar.querySelector('.rp-note-btn');
+    const hlBtn = selBar.querySelector('.rp-hl-btn');
 
     let pendingRange = null;
 
-    function hideSelBtn() { selBtn.hidden = true; pendingRange = null; }
+    function hideSelBtn() { selBar.hidden = true; pendingRange = null; }
 
     // 버튼을 누르는 순간 선택이 풀리지 않도록 기본 동작을 막는다.
-    selBtn.addEventListener('mousedown', e => e.preventDefault());
+    selBar.addEventListener('mousedown', e => e.preventDefault());
     selBtn.onclick = () => {
       const r = pendingRange;
       hideSelBtn();
       if (r) addNote(r);
     };
+    hlBtn.onclick = () => {
+      const r = pendingRange;
+      hideSelBtn();
+      if (r) addHighlight(r);
+    };
 
     function showSelBtn(range) {
       pendingRange = range;
-      selBtn.hidden = false;
+      selBar.hidden = false;
       // 선택의 끝부분 오른쪽 아래에 붙인다.
       const rects = range.getClientRects();
       const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
-      const w = selBtn.offsetWidth, h = selBtn.offsetHeight;
+      const w = selBar.offsetWidth, h = selBar.offsetHeight;
       let x = rect.right + 6;
       let y = rect.bottom + 6;
       if (x + w + 8 > window.innerWidth) x = Math.max(4, window.innerWidth - w - 8);
       if (y + h + 8 > window.innerHeight) y = Math.max(4, rect.top - h - 6);
-      selBtn.style.left = x + 'px';
-      selBtn.style.top = y + 'px';
+      selBar.style.left = x + 'px';
+      selBar.style.top = y + 'px';
     }
 
     document.addEventListener('mouseup', (e) => {
       if (e.button !== 0) return;   // 우클릭은 컨텍스트 메뉴 쪽에서 처리한다
-      if (selBtn.contains(e.target)) return;
+      if (selBar.contains(e.target)) return;
       if (modal.contains(e.target) || panel.contains(e.target)) { hideSelBtn(); return; }
-      if (e.target.closest && e.target.closest('mark[data-note-id]')) { hideSelBtn(); return; }
+      if (e.target.closest && e.target.closest('mark[data-note-id], mark[data-hl-id]')) { hideSelBtn(); return; }
       // 클릭으로 선택이 풀리는 처리가 끝난 뒤에 판단한다.
       setTimeout(() => {
         const sel = window.getSelection();
@@ -589,7 +752,7 @@
     });
 
     document.addEventListener('mousedown', (e) => {
-      if (!selBtn.hidden && !selBtn.contains(e.target)) hideSelBtn();
+      if (!selBar.hidden && !selBar.contains(e.target)) hideSelBtn();
     }, true);
     document.addEventListener('scroll', hideSelBtn, true);
     window.addEventListener('resize', hideSelBtn);
@@ -597,10 +760,17 @@
       if (e.key === 'Escape') hideSelBtn();
     });
 
-    // ── 표시된 부분 클릭 → 수정 / 삭제 ─────────────────────────
+    // ── 표시된 부분 클릭 → 코멘트 수정/삭제, 형광펜은 확인 후 지우기 ─────
     document.addEventListener('click', (e) => {
       const mark = e.target.closest && e.target.closest('mark[data-note-id]');
-      if (mark) editNote(mark);
+      if (mark) { editNote(mark); return; }
+      const hl = e.target.closest && e.target.closest('mark[data-hl-id]');
+      if (hl) {
+        clearSelection();
+        openModal({
+          label: '이 형광펜 표시를 지울까요?', showInput: false, okText: '지우기',
+        }).then(ok => { if (ok) removeHighlight(hl.dataset.hlId); });
+      }
     });
 
     // ── 복사 ───────────────────────────────────────────────────
@@ -615,9 +785,16 @@
 
     panel.querySelector('.rp-copy').onclick = () => {
       if (!notes.length) return showToast('남긴 코멘트가 없습니다.');
-      let result = '';
+      // 파일 경로를 머리말로 붙여 둔다. 에이전트가 어느 문서인지 바로 안다.
+      // 프리뷰 밖이면 docKey() 가 /index.html 같은 값을 주므로 그때는 생략한다.
+      const src = sourceUri();
+      let result = src ? '파일: ' + displayPath(src) + '\n\n' : '';
       notes.forEach((n, idx) => {
-        result += '[검토대상 ' + (idx + 1) + ']\n- 본문: "' + n.display + '"\n- 코멘트: ' + n.instruction + '\n\n';
+        // 복사 직전에 다시 읽는다(그 사이 본문이 바뀌었을 수 있다).
+        const line = (n.mark && lineOf(n.mark)) || n.line;
+        result += '[검토대상 ' + (idx + 1) + ']\n' +
+          (line ? '- 위치: L' + line + '\n' : '') +
+          '- 본문: "' + n.display + '"\n- 코멘트: ' + n.instruction + '\n\n';
       });
       copyText(result, '코멘트 ' + notes.length + '건을 클립보드에 복사했습니다.');
     };
@@ -639,6 +816,7 @@
 
     render();
     restore();
+    restoreHighlights();
   }
 
   if (document.readyState === 'loading') {

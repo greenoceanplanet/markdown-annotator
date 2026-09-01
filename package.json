@@ -2,7 +2,7 @@
   "name": "review-notes",
   "displayName": "Review Notes for Markdown Preview",
   "description": "마크다운 프리뷰에서 텍스트를 드래그한 뒤 옆에 뜨는 버튼으로 인라인 코멘트를 남기고, 모아서 AI 에이전트용 프롬프트로 클립보드에 복사합니다.",
-  "version": "0.1.6",
+  "version": "0.1.15",
   "publisher": "local",
   "engines": {
     "vscode": "^1.80.0"
