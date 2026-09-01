@@ -1,6 +1,7 @@
 .git/**
 .gitignore
 .vscodeignore
+.playwright-mcp/**
 node_modules/**
 pnpm-lock.yaml
 *.vsix
