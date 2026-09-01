@@ -91,9 +91,11 @@
   #rpModal[hidden] { display: none; }
   #rpModal .rp-dlg { background: #fff; border-radius: 10px; width: min(520px, 92vw);
     box-shadow: 0 10px 40px rgba(0,0,0,.3); overflow: hidden; }
+  #rpModal.rp-positioned .rp-dlg { position: fixed; margin: 0; }
   #rpModal .rp-quote { padding: 12px 16px; background: #f4f5f7; border-bottom: 1px solid #dfe3e8;
-    color: #444c56; max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 13px; }
-  #rpModal .rp-label { padding: 12px 16px 0; font-weight: bold; }
+    color: #444c56; max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 13px;
+    cursor: move; user-select: none; }
+  #rpModal .rp-label { padding: 12px 16px 0; font-weight: bold; cursor: move; user-select: none; }
   #rpModal .rp-input { margin: 8px 16px 0; width: calc(100% - 32px); box-sizing: border-box;
     min-height: 76px; padding: 8px 10px; border: 1px solid #d0d7de; border-radius: 6px;
     font: inherit; resize: vertical; }
@@ -181,15 +183,47 @@
     const mHintCopy = modal.querySelector('.rp-hint-copy');
     const mCancel = modal.querySelector('.rp-cancel');
     const mOk = modal.querySelector('.rp-ok');
+    const mDlg = modal.querySelector('.rp-dlg');
     let resolveModal = null;
     let modalLine = null;
 
     function closeModal(value) {
       modal.hidden = true;
+      modal.classList.remove('rp-positioned');
+      mDlg.style.left = mDlg.style.top = '';
       const r = resolveModal;
       resolveModal = null;
       if (r) r(value);
     }
+
+    // 팝업을 인용문/라벨 영역을 잡고 끌어서 옮길 수 있게 한다.
+    let dragging = false, dragDx = 0, dragDy = 0;
+    function startDrag(e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      dragging = true;
+      const rect = mDlg.getBoundingClientRect();
+      if (!modal.classList.contains('rp-positioned')) {
+        modal.classList.add('rp-positioned');
+        mDlg.style.left = rect.left + 'px';
+        mDlg.style.top = rect.top + 'px';
+      }
+      dragDx = e.clientX - rect.left;
+      dragDy = e.clientY - rect.top;
+      e.preventDefault();
+    }
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const w = mDlg.offsetWidth, h = mDlg.offsetHeight;
+      let left = e.clientX - dragDx;
+      let top = e.clientY - dragDy;
+      left = Math.min(Math.max(0, left), window.innerWidth - w);
+      top = Math.min(Math.max(0, top), window.innerHeight - h);
+      mDlg.style.left = left + 'px';
+      mDlg.style.top = top + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+    mQuote.addEventListener('mousedown', startDrag);
+    mLabel.addEventListener('mousedown', startDrag);
 
     // opts: { quote, label, value, showInput, showRemove, okText }
     function openModal(opts) {
@@ -481,19 +515,24 @@
       }
       if (at < 0) return null;
 
-      // offset 이 두 텍스트 노드의 경계에 정확히 걸치면(예: 요소의 마지막 글자까지
-      // 선택한 경우) '뒤 노드의 시작'이 아니라 '앞 노드의 끝'으로 판정해야 한다.
-      // 그러지 않으면 range 끝점이 다음 형제 요소 쪽으로 새어나가 extractContents()
-      // 가 원래 요소(h3 등)를 통째로 복제해 버린다. 그래서 앞에서부터 훑어
-      // '이 노드 안에 담기는' 첫 노드를 고른다.
-      const locate = (offset) => {
+      // offset 이 두 텍스트 노드의 경계에 정확히 걸치면 시작점과 끝점을 다르게
+      // 판정해야 한다. 끝점은(예: 요소의 마지막 글자까지 선택한 경우) '뒤 노드의
+      // 시작'이 아니라 '앞 노드의 끝'으로 판정해야 range 끝점이 다음 형제 요소
+      // 쪽으로 새어나가 extractContents() 가 원래 요소(h3 등)를 통째로 복제해
+      // 버리는 일을 막는다. 반대로 시작점을 '앞 노드의 끝'으로 판정하면, 그
+      // 앞 노드가 문단 사이 공백(개행) 텍스트 노드일 때 range 시작점이 그
+      // 문단 밖으로 새어나가 <p> 가 둘로 쪼개진다. 그래서 시작점은 '뒤 노드의
+      // 시작'을, 끝점은 '앞 노드의 끝'을 우선한다.
+      const locate = (offset, preferNext) => {
         for (let j = 0; j < nodes.length; j++) {
           const len = nodes[j].nodeValue.length;
-          if (offset <= starts[j] + len) return { node: nodes[j], offset: offset - starts[j] };
+          const end = starts[j] + len;
+          if (preferNext && offset === end && j + 1 < nodes.length) continue;
+          if (offset <= end) return { node: nodes[j], offset: offset - starts[j] };
         }
         return null;
       };
-      const a = locate(at), b = locate(at + text.length);
+      const a = locate(at, true), b = locate(at + text.length, false);
       if (!a || !b) return null;
       const r = document.createRange();
       try {
