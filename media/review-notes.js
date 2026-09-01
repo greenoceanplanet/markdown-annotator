@@ -481,10 +481,15 @@
       }
       if (at < 0) return null;
 
+      // offset 이 두 텍스트 노드의 경계에 정확히 걸치면(예: 요소의 마지막 글자까지
+      // 선택한 경우) '뒤 노드의 시작'이 아니라 '앞 노드의 끝'으로 판정해야 한다.
+      // 그러지 않으면 range 끝점이 다음 형제 요소 쪽으로 새어나가 extractContents()
+      // 가 원래 요소(h3 등)를 통째로 복제해 버린다. 그래서 앞에서부터 훑어
+      // '이 노드 안에 담기는' 첫 노드를 고른다.
       const locate = (offset) => {
-        // offset 이 걸치는 텍스트 노드를 이진탐색 대신 단순 탐색으로 찾는다.
-        for (let j = nodes.length - 1; j >= 0; j--) {
-          if (starts[j] <= offset) return { node: nodes[j], offset: offset - starts[j] };
+        for (let j = 0; j < nodes.length; j++) {
+          const len = nodes[j].nodeValue.length;
+          if (offset <= starts[j] + len) return { node: nodes[j], offset: offset - starts[j] };
         }
         return null;
       };
