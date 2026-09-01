@@ -125,7 +125,19 @@
   #rpSelBar button.rp-hl-btn { background: #fff59d; color: #5b5220; }
   #rpSelBar button.rp-hl-btn:hover { background: #ffee80; opacity: 1; }
 
-  @media print { #reviewPanel, #rpModal, #rpToast, #rpSelBar { display: none !important; } }`;
+  /* 형광펜 삭제 확인 등, 클릭 위치 근처에 뜨는 작은 팝오버 */
+  #rpConfirm { position: fixed; z-index: 10003; background: #fff; border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(15,23,42,.28), 0 0 0 1px rgba(15,23,42,.08);
+    padding: 10px 12px; font: 12px/1.5 system-ui, -apple-system, "Malgun Gothic", sans-serif;
+    max-width: 220px; }
+  #rpConfirm[hidden] { display: none; }
+  #rpConfirm .rp-confirm-label { color: #1f2430; margin-bottom: 8px; }
+  #rpConfirm .rp-confirm-btns { display: flex; gap: 6px; justify-content: flex-end; }
+  #rpConfirm .rp-confirm-btns button { padding: 4px 10px; border-radius: 5px; cursor: pointer;
+    border: 1px solid #d0d7de; background: #fff; font: inherit; }
+  #rpConfirm .rp-confirm-btns button.rp-ok { background: #b00020; color: #fff; border-color: #b00020; }
+
+  @media print { #reviewPanel, #rpModal, #rpToast, #rpSelBar, #rpConfirm { display: none !important; } }`;
 
   function init() {
     var styleEl = document.createElement('style');
@@ -224,6 +236,45 @@
       toast.classList.add('show');
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    // ── 클릭 위치 근처에 뜨는 작은 확인 팝오버 (형광펜 삭제 등) ──
+    const confirmEl = document.createElement('div');
+    confirmEl.id = 'rpConfirm';
+    confirmEl.hidden = true;
+    confirmEl.innerHTML =
+      '<div class="rp-confirm-label"></div>' +
+      '<div class="rp-confirm-btns">' +
+      '<button type="button" class="rp-cancel">취소</button>' +
+      '<button type="button" class="rp-ok">지우기</button>' +
+      '</div>';
+    document.body.appendChild(confirmEl);
+    const confirmLabel = confirmEl.querySelector('.rp-confirm-label');
+    const confirmCancel = confirmEl.querySelector('.rp-cancel');
+    const confirmOk = confirmEl.querySelector('.rp-ok');
+    let resolveConfirm = null;
+
+    function hideConfirm(value) {
+      confirmEl.hidden = true;
+      const r = resolveConfirm;
+      resolveConfirm = null;
+      if (r) r(value);
+    }
+    confirmCancel.onclick = () => hideConfirm(false);
+    confirmOk.onclick = () => hideConfirm(true);
+
+    // x, y 는 화면 좌표(clientX/clientY 기준). 화면 밖으로 나가지 않게 보정한다.
+    function confirmAt(x, y, label) {
+      if (resolveConfirm) hideConfirm(false);
+      confirmLabel.textContent = label;
+      confirmEl.hidden = false;
+      const w = confirmEl.offsetWidth, h = confirmEl.offsetHeight;
+      let left = x, top = y;
+      if (left + w + 8 > window.innerWidth) left = Math.max(4, window.innerWidth - w - 8);
+      if (top + h + 8 > window.innerHeight) top = Math.max(4, window.innerHeight - h - 8);
+      confirmEl.style.left = left + 'px';
+      confirmEl.style.top = top + 'px';
+      return new Promise(res => { resolveConfirm = res; });
     }
 
     // ── 패널 UI ───────────────────────────────────────────────
@@ -471,7 +522,7 @@
       mark.title = title;
       mark.appendChild(range.extractContents());
       range.insertNode(mark);
-      return mark;
+      return unwrapBlockChild(mark);
     }
 
     function wrapHighlight(range, id) {
@@ -480,6 +531,23 @@
       mark.title = '클릭: 형광펜 지우기';
       mark.appendChild(range.extractContents());
       range.insertNode(mark);
+      return unwrapBlockChild(mark);
+    }
+
+    // 문단 전체를 선택하면 range 가 <p> 같은 블록 요소째로 걸려, extractContents()
+    // 가 인라인 요소인 <mark> 안에 블록 요소를 통째로 넣어 버린다(HTML 상 비정상
+    // 중첩이라 브라우저가 <mark> 를 무시하고 레이아웃을 깨뜨린다). mark 의 자식이
+    // 블록 요소 하나뿐이면 자리를 맞바꿔 mark 를 그 블록 안으로 넣어 준다.
+    function unwrapBlockChild(mark) {
+      if (mark.childNodes.length !== 1) return mark;
+      const child = mark.firstChild;
+      if (child.nodeType !== 1) return mark;
+      const display = getComputedStyle(child).display;
+      if (display !== 'block' && display !== 'list-item') return mark;
+
+      mark.parentNode.replaceChild(child, mark);
+      mark.append(...child.childNodes);
+      child.appendChild(mark);
       return mark;
     }
 
@@ -753,11 +821,12 @@
 
     document.addEventListener('mousedown', (e) => {
       if (!selBar.hidden && !selBar.contains(e.target)) hideSelBtn();
+      if (!confirmEl.hidden && !confirmEl.contains(e.target)) hideConfirm(false);
     }, true);
     document.addEventListener('scroll', hideSelBtn, true);
     window.addEventListener('resize', hideSelBtn);
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hideSelBtn();
+      if (e.key === 'Escape') { hideSelBtn(); hideConfirm(false); }
     });
 
     // ── 표시된 부분 클릭 → 코멘트 수정/삭제, 형광펜은 확인 후 지우기 ─────
@@ -767,9 +836,8 @@
       const hl = e.target.closest && e.target.closest('mark[data-hl-id]');
       if (hl) {
         clearSelection();
-        openModal({
-          label: '이 형광펜 표시를 지울까요?', showInput: false, okText: '지우기',
-        }).then(ok => { if (ok) removeHighlight(hl.dataset.hlId); });
+        confirmAt(e.clientX, e.clientY, '이 형광펜 표시를 지울까요?')
+          .then(ok => { if (ok) removeHighlight(hl.dataset.hlId); });
       }
     });
 
