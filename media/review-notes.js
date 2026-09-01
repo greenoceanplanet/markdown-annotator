@@ -162,7 +162,7 @@
       '<div class="rp-quote"></div>' +
       '<div class="rp-label"></div>' +
       '<textarea class="rp-input"></textarea>' +
-      '<div class="rp-hint">Ctrl+Enter 확인 · Esc 취소</div>' +
+      '<div class="rp-hint">Ctrl+Enter 확인 · <span class="rp-hint-copy">Shift+Alt+C 복사 · </span>Esc 취소</div>' +
       '<div class="rp-btns">' +
       '<button class="rp-remove rp-danger">삭제</button>' +
       '<button class="rp-copy-input">📋 복사</button>' +
@@ -178,6 +178,7 @@
     const mHint = modal.querySelector('.rp-hint');
     const mRemove = modal.querySelector('.rp-remove');
     const mCopy = modal.querySelector('.rp-copy-input');
+    const mHintCopy = modal.querySelector('.rp-hint-copy');
     const mCancel = modal.querySelector('.rp-cancel');
     const mOk = modal.querySelector('.rp-ok');
     let resolveModal = null;
@@ -202,7 +203,9 @@
       mRemove.style.display = opts.showRemove ? '' : 'none';
       modalLine = opts.line || null;
       // 코멘트 작성/수정 팝업(인용문 + 입력창)에서만 복사 버튼을 보인다.
-      mCopy.style.display = (withInput && opts.quote) ? '' : 'none';
+      const showCopy = withInput && opts.quote;
+      mCopy.style.display = showCopy ? '' : 'none';
+      mHintCopy.style.display = showCopy ? '' : 'none';
       mOk.textContent = opts.okText || '확인';
       modal.hidden = false;
       if (withInput) { mInput.focus(); mInput.select(); } else { mOk.focus(); }
@@ -225,6 +228,10 @@
     modal.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); closeModal(null); }
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); mOk.click(); }
+      // Shift+Alt+C: 코멘트 팝업에서 바로 복사(복사 버튼이 보일 때만).
+      if (e.altKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+        if (mCopy.style.display !== 'none') { e.preventDefault(); mCopy.click(); }
+      }
     });
 
     const toast = document.createElement('div');
@@ -539,12 +546,17 @@
     // 중첩이라 브라우저가 <mark> 를 무시하고 레이아웃을 깨뜨린다). mark 의 자식이
     // 블록 요소 하나뿐이면 자리를 맞바꿔 mark 를 그 블록 안으로 넣어 준다.
     function unwrapBlockChild(mark) {
-      if (mark.childNodes.length !== 1) return mark;
-      const child = mark.firstChild;
+      // 앞뒤에 공백뿐인 텍스트 노드가 딸려 와도(개행 등) 블록 자식 판단을 막지 않는다.
+      const kids = Array.from(mark.childNodes);
+      const blank = n => n.nodeType === 3 && !n.nodeValue.trim();
+      const real = kids.filter(n => !blank(n));
+      if (real.length !== 1) return mark;
+      const child = real[0];
       if (child.nodeType !== 1) return mark;
       const display = getComputedStyle(child).display;
       if (display !== 'block' && display !== 'list-item') return mark;
 
+      kids.filter(blank).forEach(n => mark.removeChild(n));
       mark.parentNode.replaceChild(child, mark);
       mark.append(...child.childNodes);
       child.appendChild(mark);
