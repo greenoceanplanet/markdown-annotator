@@ -45,23 +45,13 @@
 
 ## 개발자용 — 소스에서 빌드/설치
 
-이 저장소를 직접 수정하며 개발할 때는 아래처럼 로컬에서 패키징·설치합니다.
-
-```
-pnpm run package
-```
-
-생성된 `.vsix` 파일을 VSCode에서 `Ctrl+Shift+P` → `Extensions: Install from VSIX...`로 설치합니다.
-
-### 업데이트
-
-`media/review-notes.js` 등을 수정한 뒤 실제 확장에 반영하려면 다시 패키징하고 재설치해야 합니다.
+이 저장소를 직접 수정하며 개발할 때는 아래처럼 로컬에서 패키징·설치합니다. `media/review-notes.js` 등을 수정한 뒤 실제 확장에 반영할 때도 같은 명령으로 다시 패키징·재설치하면 됩니다.
 
 ```
 pnpm run release
 ```
 
-`release` 는 패키징(`pnpm run package`)과 설치(`pnpm run install-ext`)를 이어서 실행합니다.
+`release` 는 패키징(`pnpm run package`)과 CLI 설치(`pnpm run install-ext`, 내부적으로 `code --install-extension`)를 이어서 실행합니다.
 `vsce` 는 `pnpm dlx` 로 그때그때 받아 쓰므로 따로 설치할 의존성은 없습니다.
 
 재설치 후에는 열려 있던 마크다운 프리뷰를 닫았다가 다시 열어야 새 스크립트가 적용됩니다.
